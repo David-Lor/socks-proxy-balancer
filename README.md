@@ -8,5 +8,6 @@ This project is forked from [extremecoders-re/go-dispatch-proxy](https://github.
 
 - Focus on the feature of load-balancing multiple SOCKS5 proxies into one (which the original repository refers to as "SSH tunnel load balancing")
 - Docker support
+- Linux-only support
 - Parametrization via env variables or config file instead of CLI (Docker friendly)
 - Avoid logging each connection

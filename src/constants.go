@@ -1,4 +1,3 @@
-// const.go
 package main
 
 // AUTH_METHOD

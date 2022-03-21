@@ -1,4 +1,3 @@
-// socks.go
 package main
 
 import (

@@ -1,4 +1,3 @@
-// servers_response_linux.go
 package main
 
 import (
