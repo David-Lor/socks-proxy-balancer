@@ -85,7 +85,7 @@ func handleTunnelConnection(conn net.Conn) {
 		return
 	}
 
-	log.Println("[DEBUG] Tunnelled to", loadBalancer.address)
+	//log.Println("[DEBUG] Tunnelled to", loadBalancer.address)
 	pipeConnections(conn, remoteConn)
 }
 
