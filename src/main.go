@@ -11,36 +11,36 @@ import (
 	"sync"
 )
 
-type load_balancer struct {
-	address             string
-	iface               string
-	contention_ratio    int
-	current_connections int
+type LoadBalancer struct {
+	address            string
+	iface              string
+	contentionRatio    int
+	currentConnections int
 }
 
 // The load balancer used in the previous connection
-var lb_index int = 0
+var lbIndex int
 
 // List of all load balancers
-var lb_list []load_balancer
+var lbList []LoadBalancer
 
-// Mutex to serialize access to function get_load_balancer
+// Mutex to serialize access to function getLoadBalancer
 var mutex *sync.Mutex
 
 /*
 	Get a load balancer according to contention ratio
 */
-func get_load_balancer() *load_balancer {
+func getLoadBalancer() *LoadBalancer {
 	mutex.Lock()
-	lb := &lb_list[lb_index]
-	lb.current_connections += 1
+	lb := &lbList[lbIndex]
+	lb.currentConnections += 1
 
-	if lb.current_connections == lb.contention_ratio {
-		lb.current_connections = 0
-		lb_index += 1
+	if lb.currentConnections == lb.contentionRatio {
+		lb.currentConnections = 0
+		lbIndex += 1
 
-		if lb_index == len(lb_list) {
-			lb_index = 0
+		if lbIndex == len(lbList) {
+			lbIndex = 0
 		}
 	}
 	mutex.Unlock()
@@ -50,20 +50,23 @@ func get_load_balancer() *load_balancer {
 /*
 	Joins the local and remote connections together
 */
-func pipe_connections(local_conn, remote_conn net.Conn) {
+
+func pipeConnections(localConn, remoteConn net.Conn) {
+	//goland:noinspection GoUnhandledErrorResult
 	go func() {
-		defer remote_conn.Close()
-		defer local_conn.Close()
-		_, err := io.Copy(remote_conn, local_conn)
+		defer remoteConn.Close()
+		defer localConn.Close()
+		_, err := io.Copy(remoteConn, localConn)
 		if err != nil {
 			return
 		}
 	}()
 
+	//goland:noinspection GoUnhandledErrorResult
 	go func() {
-		defer remote_conn.Close()
-		defer local_conn.Close()
-		_, err := io.Copy(local_conn, remote_conn)
+		defer remoteConn.Close()
+		defer localConn.Close()
+		_, err := io.Copy(localConn, remoteConn)
 		if err != nil {
 			return
 		}
@@ -73,30 +76,30 @@ func pipe_connections(local_conn, remote_conn net.Conn) {
 /*
 	Handle connections in tunnel mode
 */
-func handle_tunnel_connection(conn net.Conn) {
-	load_balancer := get_load_balancer()
+func handleTunnelConnection(conn net.Conn) {
+	loadBalancer := getLoadBalancer()
 
-	remote_addr, _ := net.ResolveTCPAddr("tcp4", load_balancer.address)
-	remote_conn, err := net.DialTCP("tcp4", nil, remote_addr)
+	remoteAddr, _ := net.ResolveTCPAddr("tcp4", loadBalancer.address)
+	remoteConn, err := net.DialTCP("tcp4", nil, remoteAddr)
 
 	if err != nil {
-		log.Println("[WARN]", load_balancer.address, fmt.Sprintf("{%s}", err))
-		conn.Close()
+		log.Println("[WARN]", loadBalancer.address, fmt.Sprintf("{%s}", err))
+		_ = conn.Close()
 		return
 	}
 
-	log.Println("[DEBUG] Tunnelled to", load_balancer.address)
-	pipe_connections(conn, remote_conn)
+	log.Println("[DEBUG] Tunnelled to", loadBalancer.address)
+	pipeConnections(conn, remoteConn)
 }
 
 /*
 	Calls the apprpriate handle_connections based on tunnel mode
 */
-func handle_connection(conn net.Conn, tunnel bool) {
+func handleConnection(conn net.Conn, tunnel bool) {
 	if tunnel {
-		handle_tunnel_connection(conn)
-	} else if address, err := handle_socks_connection(conn); err == nil {
-		server_response(conn, address)
+		handleTunnelConnection(conn)
+	} else if address, err := handleSocksConnection(conn); err == nil {
+		serverResponse(conn, address)
 	}
 }
 
@@ -104,7 +107,7 @@ func handle_connection(conn net.Conn, tunnel bool) {
 	Detect the addresses which can  be used for dispatching in non-tunnelling mode.
 	Alternate to ipconfig/ifconfig
 */
-func detect_interfaces() {
+func detectInterfaces() {
 	fmt.Println("--- Listing the available adresses for dispatching")
 	ifaces, _ := net.Interfaces()
 
@@ -126,7 +129,7 @@ func detect_interfaces() {
 /*
 	Gets the interface associated with the IP
 */
-func get_iface_from_ip(ip string) string {
+func getIfaceFromIp(ip string) string {
 	ifaces, _ := net.Interfaces()
 
 	for _, iface := range ifaces {
@@ -149,60 +152,61 @@ func get_iface_from_ip(ip string) string {
 /*
 	Parses the command line arguements to obtain the list of load balancers
 */
-func parse_load_balancers(args []string, tunnel bool) {
+func parseLoadBalancers(args []string, tunnel bool) {
 	if len(args) == 0 {
 		log.Fatal("[FATAL] Please specify one or more load balancers")
 	}
 
-	lb_list = make([]load_balancer, flag.NArg())
+	lbList = make([]LoadBalancer, flag.NArg())
 
 	for idx, a := range args {
 		splitted := strings.Split(a, "@")
 		iface := ""
-		var lb_ip string
-		var lb_port int
+		var lbIp string
+		var lbPort int
 		var err error
 
 		if tunnel {
-			ip_port := strings.Split(splitted[0], ":")
-			if len(ip_port) != 2 {
+			ipPort := strings.Split(splitted[0], ":")
+			if len(ipPort) != 2 {
 				log.Fatal("[FATAL] Invalid address specification ", splitted[0])
 				return
 			}
 
-			lb_ip = ip_port[0]
-			lb_port, err = strconv.Atoi(ip_port[1])
-			if err != nil || lb_port <= 0 || lb_port > 65535 {
+			lbIp = ipPort[0]
+			lbPort, err = strconv.Atoi(ipPort[1])
+			if err != nil || lbPort <= 0 || lbPort > 65535 {
 				log.Fatal("[FATAL] Invalid port ", splitted[0])
 				return
 			}
 
 		} else {
-			lb_ip = splitted[0]
-			lb_port = 0
+			lbIp = splitted[0]
+			lbPort = 0
 		}
 
-		if net.ParseIP(lb_ip).To4() == nil {
-			log.Fatal("[FATAL] Invalid address ", lb_ip)
+		if net.ParseIP(lbIp).To4() == nil {
+			log.Fatal("[FATAL] Invalid address ", lbIp)
 		}
-		var cont_ratio int = 1
+
+		contRatio := 1
 		if len(splitted) > 1 {
-			cont_ratio, err = strconv.Atoi(splitted[1])
-			if err != nil || cont_ratio <= 0 {
-				log.Fatal("[FATAL] Invalid contention ratio for ", lb_ip)
+			contRatio, err = strconv.Atoi(splitted[1])
+			if err != nil || contRatio <= 0 {
+				log.Fatal("[FATAL] Invalid contention ratio for ", lbIp)
 			}
 		}
 
 		// Obtaining the interface name of the load balancer IP's doesn't make sense in tunnel mode
 		if !tunnel {
-			iface = get_iface_from_ip(lb_ip)
+			iface = getIfaceFromIp(lbIp)
 			if iface == "" {
-				log.Fatal("[FATAL] IP address not associated with an interface ", lb_ip)
+				log.Fatal("[FATAL] IP address not associated with an interface ", lbIp)
 			}
 		}
 
-		log.Printf("[INFO] Load balancer %d: %s, contention ratio: %d\n", idx+1, lb_ip, cont_ratio)
-		lb_list[idx] = load_balancer{address: fmt.Sprintf("%s:%d", lb_ip, lb_port), iface: iface, contention_ratio: cont_ratio, current_connections: 0}
+		log.Printf("[INFO] Load balancer %d: %s, contention ratio: %d\n", idx+1, lbIp, contRatio)
+		lbList[idx] = LoadBalancer{address: fmt.Sprintf("%s:%d", lbIp, lbPort), iface: iface, contentionRatio: contRatio, currentConnections: 0}
 	}
 }
 
@@ -217,7 +221,7 @@ func main() {
 
 	flag.Parse()
 	if *detect {
-		detect_interfaces()
+		detectInterfaces()
 		return
 	}
 
@@ -235,21 +239,22 @@ func main() {
 	}
 
 	//Parse remaining string to get addresses of load balancers
-	parse_load_balancers(flag.Args(), *tunnel)
+	parseLoadBalancers(flag.Args(), *tunnel)
 
-	local_bind_address := fmt.Sprintf("%s:%d", *lhost, *lport)
+	localBindAddress := fmt.Sprintf("%s:%d", *lhost, *lport)
 
 	// Start local server
-	l, err := net.Listen("tcp4", local_bind_address)
+	l, err := net.Listen("tcp4", localBindAddress)
 	if err != nil {
-		log.Fatalln("[FATAL] Could not start local server on ", local_bind_address)
+		log.Fatalln("[FATAL] Could not start local server on ", localBindAddress)
 	}
-	log.Println("[INFO] Local server started on ", local_bind_address)
+	log.Println("[INFO] Local server started on ", localBindAddress)
+	//goland:noinspection GoUnhandledErrorResult
 	defer l.Close()
 
 	mutex = &sync.Mutex{}
 	for {
 		conn, _ := l.Accept()
-		go handle_connection(conn, *tunnel)
+		go handleConnection(conn, *tunnel)
 	}
 }

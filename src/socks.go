@@ -11,29 +11,29 @@ import (
 /*
 
  */
-func client_greeting(conn net.Conn) (byte, []byte, error) {
+func clientGreeting(conn net.Conn) (byte, []byte, error) {
 	buf := make([]byte, 2)
 
 	if nRead, err := conn.Read(buf); err != nil || nRead != len(buf) {
 		return 0, nil, errors.New("[WARN] client greeting failed")
 	}
 
-	socks_version := buf[0]
-	num_auth_methods := buf[1]
+	socksVersion := buf[0]
+	numAuthMethods := buf[1]
 
-	auth_methods := make([]byte, num_auth_methods)
+	authMethods := make([]byte, numAuthMethods)
 
-	if nRead, err := conn.Read(auth_methods); err != nil || nRead != int(num_auth_methods) {
+	if nRead, err := conn.Read(authMethods); err != nil || nRead != int(numAuthMethods) {
 		return 0, nil, errors.New("[WARN] client greeting failed")
 	}
 
-	return socks_version, auth_methods, nil
+	return socksVersion, authMethods, nil
 }
 
 /*
 
  */
-func servers_choice(conn net.Conn) error {
+func serversChoice(conn net.Conn) error {
 
 	if nWrite, err := conn.Write([]byte{5, 0}); err != nil || nWrite != 2 {
 		return errors.New("[WARN] servers choice failed")
@@ -44,81 +44,85 @@ func servers_choice(conn net.Conn) error {
 /*
 
  */
-func client_conection_request(conn net.Conn) (string, error) {
+func clientConectionRequest(conn net.Conn) (string, error) {
 	header := make([]byte, 4)
 	port := make([]byte, 2)
 	var address string
 
+	//goland:noinspection GoUnhandledErrorResult
 	if nRead, err := conn.Read(header); err != nil || nRead != len(header) {
-		conn.Write([]byte{5, SERVER_FAILURE, 0, 1, 0, 0, 0, 0, 0, 0})
+		conn.Write([]byte{5, RequestStatusServerFailure, 0, 1, 0, 0, 0, 0, 0, 0})
 		conn.Close()
 		return "", errors.New("[WARN] client connection request failed")
 	}
 
-	socks_version := header[0]
-	cmd_code := header[1]
+	socksVersion := header[0]
+	cmdCode := header[1]
 	//	reserved := header[2]
-	address_type := header[3]
+	addressType := header[3]
 
-	if socks_version != 5 {
-		conn.Write([]byte{5, SERVER_FAILURE, 0, 1, 0, 0, 0, 0, 0, 0})
+	//goland:noinspection GoUnhandledErrorResult
+	if socksVersion != 5 {
+		conn.Write([]byte{5, RequestStatusServerFailure, 0, 1, 0, 0, 0, 0, 0, 0})
 		conn.Close()
 		return "", errors.New("[WARN] unsupported SOCKS version")
 	}
 
-	if cmd_code != CONNECT {
-		conn.Write([]byte{5, COMMAND_NOT_SUPPORTED, 0, 1, 0, 0, 0, 0, 0, 0})
+	//goland:noinspection GoUnhandledErrorResult
+	if cmdCode != CommandConnect {
+		conn.Write([]byte{5, RequestStatusCommandNotSupported, 0, 1, 0, 0, 0, 0, 0, 0})
 		conn.Close()
 		return "", errors.New("[WARN] unsupported command code")
 	}
 
-	switch address_type {
-	case IPV4:
-		ipv4_address := make([]byte, 4)
+	//goland:noinspection GoUnhandledErrorResult
+	switch addressType {
+	case AddrTypeIPv4:
+		ipv4Address := make([]byte, 4)
 
-		if nRead, err := conn.Read(ipv4_address); err != nil || nRead != len(ipv4_address) {
-			conn.Write([]byte{5, SERVER_FAILURE, 0, 1, 0, 0, 0, 0, 0, 0})
+		if nRead, err := conn.Read(ipv4Address); err != nil || nRead != len(ipv4Address) {
+			conn.Write([]byte{5, RequestStatusServerFailure, 0, 1, 0, 0, 0, 0, 0, 0})
 			conn.Close()
 			return "", errors.New("[WARN] client connection request failed")
 		}
 
 		if nRead, err := conn.Read(port); err != nil || nRead != len(port) {
-			conn.Write([]byte{5, SERVER_FAILURE, 0, 1, 0, 0, 0, 0, 0, 0})
+			conn.Write([]byte{5, RequestStatusServerFailure, 0, 1, 0, 0, 0, 0, 0, 0})
 			conn.Close()
 			return "", errors.New("[WARN] client connection request failed")
 		}
-		address = fmt.Sprintf("%d.%d.%d.%d:%d", ipv4_address[0],
-			ipv4_address[1],
-			ipv4_address[2],
-			ipv4_address[3],
+		address = fmt.Sprintf("%d.%d.%d.%d:%d", ipv4Address[0],
+			ipv4Address[1],
+			ipv4Address[2],
+			ipv4Address[3],
 			binary.BigEndian.Uint16(port))
 
-	case DOMAIN:
-		domain_name_length := make([]byte, 1)
+	case AddrTypeDomain:
+		domainNameLength := make([]byte, 1)
 
-		if nRead, err := conn.Read(domain_name_length); err != nil || nRead != len(domain_name_length) {
-			conn.Write([]byte{5, SERVER_FAILURE, 0, 1, 0, 0, 0, 0, 0, 0})
+		if nRead, err := conn.Read(domainNameLength); err != nil || nRead != len(domainNameLength) {
+			conn.Write([]byte{5, RequestStatusServerFailure, 0, 1, 0, 0, 0, 0, 0, 0})
 			conn.Close()
 			return "", errors.New("[WARN] client connection request failed")
 		}
 
-		domain_name := make([]byte, domain_name_length[0])
+		domainName := make([]byte, domainNameLength[0])
 
-		if nRead, err := conn.Read(domain_name); err != nil || nRead != len(domain_name) {
-			conn.Write([]byte{5, SERVER_FAILURE, 0, 1, 0, 0, 0, 0, 0, 0})
+		if nRead, err := conn.Read(domainName); err != nil || nRead != len(domainName) {
+			conn.Write([]byte{5, RequestStatusServerFailure, 0, 1, 0, 0, 0, 0, 0, 0})
 			conn.Close()
 			return "", errors.New("[WARN] client connection request failed")
 		}
 
 		if nRead, err := conn.Read(port); err != nil || nRead != len(port) {
-			conn.Write([]byte{5, SERVER_FAILURE, 0, 1, 0, 0, 0, 0, 0, 0})
+			conn.Write([]byte{5, RequestStatusServerFailure, 0, 1, 0, 0, 0, 0, 0, 0})
 			conn.Close()
 			return "", errors.New("[WARN] client connection request failed")
 		}
-		address = fmt.Sprintf("%s:%d", string(domain_name), binary.BigEndian.Uint16(port))
+		address = fmt.Sprintf("%s:%d", string(domainName), binary.BigEndian.Uint16(port))
 
 	default:
-		conn.Write([]byte{5, ADDRTYPE_NOT_SUPPORTED, 0, 1, 0, 0, 0, 0, 0, 0})
+		conn.Write([]byte{5, RequestStatusAddrtypeNotSupported, 0, 1, 0, 0, 0, 0, 0, 0})
 		conn.Close()
 		return "", errors.New("[WARN] unsupported address type")
 	}
@@ -128,19 +132,19 @@ func client_conection_request(conn net.Conn) (string, error) {
 /*
 
  */
-func handle_socks_connection(conn net.Conn) (string, error) {
+func handleSocksConnection(conn net.Conn) (string, error) {
 
-	if _, _, err := client_greeting(conn); err != nil {
+	if _, _, err := clientGreeting(conn); err != nil {
 		log.Println(err)
 		return "", err
 	}
 
-	if err := servers_choice(conn); err != nil {
+	if err := serversChoice(conn); err != nil {
 		log.Println(err)
 		return "", err
 	}
 
-	address, err := client_conection_request(conn)
+	address, err := clientConectionRequest(conn)
 	if err != nil {
 		log.Println(err)
 		return "", err
