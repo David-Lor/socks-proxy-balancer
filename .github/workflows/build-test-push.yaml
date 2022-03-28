@@ -68,7 +68,11 @@ jobs:
       - name: "Build Docker image"
         run: make build IMAGE_NAME="${{ env.imageName }}"
       - name: "Test Docker image"
-        run: make test
+        uses: nick-fields/retry@71062288b76e2b6214ebde0e673ce0de1755740a
+        with:
+          max_attempts: 5
+          timeout_minutes: 3
+          command: make test
         env:
           PROXY_BALANCER_CONTAINER_IMAGE: ${{ env.imageName }}
           UPSTREAM_CONTAINERS_COUNT: "5"
