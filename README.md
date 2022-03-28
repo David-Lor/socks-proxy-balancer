@@ -35,9 +35,12 @@ SOCKS_CONNECT2="10.0.0.2:9050,10.0.0.3:9051"
 ### Example: load balancing multiple Tor proxies using Docker
 
 ```bash
-# Build the container
+BALANCER_IMAGE=ghcr.io/david-lor/socks-proxy-balancer:latest
+
+# ...or build the image
 # (if make not available in your system, run the command referenced under "build:" in the Makefile)
 make build
+BALANCER_IMAGE=local/socks-proxy-balancer:latest
 
 # Create a Docker network for this example
 NETWORK="socks-proxy-balancer"
@@ -52,7 +55,7 @@ docker run -d --name=tor-proxy-3 -p 9053:9050 --network="$NETWORK" rdsubhas/tor-
 docker run -d --name=tor-proxy-4 -p 9054:9050 --network="$NETWORK" rdsubhas/tor-privoxy-alpine
 
 # Start the proxy balancer
-docker run -d --name=tor-proxy-balancer -p 9050:9050 --network="$NETWORK" -e SOCKS_CONNECT="tor-proxy-1:9050, tor-proxy-2:9050, tor-proxy-3:9050, tor-proxy-4:9050" local/socks-proxy-balancer:latest
+docker run -d --name=tor-proxy-balancer -p 9050:9050 --network="$NETWORK" -e SOCKS_CONNECT="tor-proxy-1:9050, tor-proxy-2:9050, tor-proxy-3:9050, tor-proxy-4:9050" $BALANCER_IMAGE
 
 # Get the public IP from each tor-proxy container
 curl -x socks5h://localhost:9051 https://api.ipify.org
