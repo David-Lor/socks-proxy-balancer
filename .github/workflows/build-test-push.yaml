@@ -1,0 +1,85 @@
+name: "Build, Test, Push"
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch: {}
+
+jobs:
+  Conditionals:
+    name: "Conditionals"
+    runs-on: ubuntu-latest
+    outputs:
+      flag: ${{ env.flag }}
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@master
+        with:
+          fetch-depth: 1
+      - name: "Verify if any of the image-involved files changed"
+        id: changed_files
+        uses: tj-actions/changed-files@v11.5
+        with:
+          files: |
+            .dockerignore
+            Dockerfile
+            tools/**
+            src/**
+      - name: "Set output flag"
+        if: ${{ steps.changed_files.outputs.any_changed == 'true' }}
+        run: echo "flag=true" >> $GITHUB_ENV
+
+  BuildTestPush:
+    name: "Build, Test, Push"
+    runs-on: ubuntu-latest
+    needs:
+      - conditionals
+    if: ${{ needs.Conditionals.outputs.flag == 'true' }}
+    env:
+      IMAGE_NAME_BASE: "ghcr.io/david-lor/portforward"
+      imageVersion: "dev"
+    steps:
+      # Setup
+      - name: "Checkout"
+        uses: actions/checkout@master
+        with:
+          fetch-depth: 1
+      - name: "Setup Python"
+        uses: actions/setup-python@master
+        with:
+          python-version: "3.8"
+          architecture: "x64"
+      - name: "Setup Python requirements"
+        working-directory: "./tools"
+        run: pip install -r test-requirements.txt
+
+      # Flags & Variables
+      - name: "Set Push flag"
+        if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
+        run: echo "push=true" >> $GITHUB_ENV
+      - name: "Image version (main)"
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: echo "imageVersion=latest" >> $GITHUB_ENV
+      - name: "Image name"
+        run: echo "imageName=${{ env.IMAGE_NAME_BASE }}:${{ env.imageVersion }}" >> $GITHUB_ENV
+
+      # Build & Test
+      - name: "Build Docker image"
+        run: make build IMAGE_NAME="${{ env.imageName }}"
+      - name: "Test Docker image"
+        run: make test
+        env:
+          PROXY_BALANCER_CONTAINER_IMAGE: ${{ env.imageName }}
+          UPSTREAM_CONTAINERS_COUNT: "5"
+
+      # Push
+      - name: "Login to GitHub Container Registry"
+        uses: docker/login-action@v1
+        if: ${{ env.push == 'true' }}
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Docker push"
+        if: ${{ env.push == 'true' }}
+        run: docker push ${{ env.imageName }}
