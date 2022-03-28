@@ -37,7 +37,7 @@ jobs:
       - conditionals
     if: ${{ needs.Conditionals.outputs.flag == 'true' }}
     env:
-      IMAGE_NAME_BASE: "ghcr.io/david-lor/portforward"
+      IMAGE_NAME_BASE: "ghcr.io/david-lor/socks-proxy-balancer"
       imageVersion: "dev"
     steps:
       # Setup
