@@ -15,7 +15,7 @@ jobs:
       - name: "Checkout"
         uses: actions/checkout@master
         with:
-          fetch-depth: 1
+          fetch-depth: 0
       - name: "Verify if any of the image-involved files changed"
         id: changed_files
         uses: tj-actions/changed-files@v11.5
@@ -25,6 +25,7 @@ jobs:
             Dockerfile
             tools/**
             src/**
+            .github/workflows/build-test-push.yaml
       - name: "Set output flag"
         if: ${{ steps.changed_files.outputs.any_changed == 'true' }}
         run: echo "flag=true" >> $GITHUB_ENV
